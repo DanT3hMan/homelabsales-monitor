@@ -24,15 +24,18 @@ import re
 import sys
 from pathlib import Path
 
+import praw
 import requests
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 
-DISCORD_WEBHOOK = os.environ.get("DISCORD_WEBHOOK_URL", "")
-SEEN_FILE = Path(__file__).parent / "seen_posts.json"
-SUBREDDIT = "homelabsales"
+DISCORD_WEBHOOK      = os.environ.get("DISCORD_WEBHOOK_URL", "")
+REDDIT_CLIENT_ID     = os.environ.get("REDDIT_CLIENT_ID", "")
+REDDIT_CLIENT_SECRET = os.environ.get("REDDIT_CLIENT_SECRET", "")
+SEEN_FILE  = Path(__file__).parent / "seen_posts.json"
+SUBREDDIT  = "homelabsales"
 FETCH_LIMIT = 50
-USER_AGENT = "homelabsales-monitor/1.0 (personal deal watcher)"
+USER_AGENT = "homelabsales-monitor/1.0 (by /u/DanT3hMan)"
 
 # Maximum $/TB to trigger a notification. Set to None to disable price filtering
 # and notify on all matching posts regardless of price.
@@ -250,11 +253,28 @@ def save_seen(seen: set):
 
 # ── Reddit ─────────────────────────────────────────────────────────────────────
 
-def fetch_new_posts() -> list:
-    url = f"https://www.reddit.com/r/{SUBREDDIT}/new.json?limit={FETCH_LIMIT}"
-    resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=15)
-    resp.raise_for_status()
-    return resp.json()["data"]["children"]
+def fetch_new_posts() -> list[dict]:
+    """
+    Fetch new posts via the official Reddit OAuth API (PRAW).
+    Returns a list of plain dicts so the rest of the script is unchanged.
+    Uses client_credentials (no user login needed for public subreddits).
+    """
+    reddit = praw.Reddit(
+        client_id=REDDIT_CLIENT_ID,
+        client_secret=REDDIT_CLIENT_SECRET,
+        user_agent=USER_AGENT,
+    )
+    posts = []
+    for post in reddit.subreddit(SUBREDDIT).new(limit=FETCH_LIMIT):
+        posts.append({
+            "id":              post.id,
+            "title":           post.title,
+            "link_flair_text": post.link_flair_text,
+            "selftext":        post.selftext,
+            "author":          post.author.name if post.author else "[deleted]",
+            "permalink":       post.permalink,
+        })
+    return posts
 
 # ── Discord ────────────────────────────────────────────────────────────────────
 
@@ -302,9 +322,14 @@ def send_discord(post: dict, price_per_tb: float | None, price_label: str, warni
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 def main():
-    if not DISCORD_WEBHOOK:
-        print("ERROR: DISCORD_WEBHOOK_URL is not set.", file=sys.stderr)
-        print("  Set it in your environment or source your .env file first.", file=sys.stderr)
+    missing = [k for k, v in {
+        "DISCORD_WEBHOOK_URL": DISCORD_WEBHOOK,
+        "REDDIT_CLIENT_ID":    REDDIT_CLIENT_ID,
+        "REDDIT_CLIENT_SECRET": REDDIT_CLIENT_SECRET,
+    }.items() if not v]
+    if missing:
+        for k in missing:
+            print(f"ERROR: {k} is not set.", file=sys.stderr)
         sys.exit(1)
 
     seen = load_seen()
@@ -319,7 +344,7 @@ def main():
     notified = 0
 
     for item in posts:
-        post = item["data"]
+        post = item
         post_id = post["id"]
 
         if post_id in seen:
