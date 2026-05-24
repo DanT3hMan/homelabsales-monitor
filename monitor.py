@@ -41,8 +41,6 @@ USER_AGENT = "homelabsales-monitor/1.0 (by /u/DanT3hMan)"
 # and notify on all matching posts regardless of price.
 PRICE_PER_TB_THRESHOLD: float | None = 25.0
 
-# US location flairs to accept
-US_FLAIRS = {"us-e", "us-w", "us-c"}
 
 # ── Post-type filter ───────────────────────────────────────────────────────────
 
@@ -60,7 +58,10 @@ def is_us_flair(flair: str | None) -> bool:
     """
     if not flair:
         return True
-    return flair.strip().lower() in US_FLAIRS
+    # Accept any US flair variant (US-E, US-W, US-C, US-MI, US-AUT, USA-VA, etc.)
+    # Rejects EU, CAN, COMPLETE, SGP, Other, and anything else non-US
+    f = flair.strip().lower()
+    return f.startswith("us-") or f.startswith("usa-")
 
 # ── SATA HDD filter ────────────────────────────────────────────────────────────
 
@@ -74,26 +75,27 @@ _HARD_EXCLUDE_PATTERNS = [
 
 # At least one of these must appear in the title
 _HDD_PATTERNS = [
-    r'\bhdd\b',
-    r'hard[\s\-]?drive',
-    r'hard[\s\-]?disk',
+    r'\bhdds?\b',                        # HDD or HDDs
+    r'hard[\s\-]?drives?',
+    r'hard[\s\-]?disks?',
     r'\bsata\b',
     # Seagate SATA lines (Exos comes in SATA and SAS, but SAS check below catches SAS-only posts)
     r'barracuda',
     r'ironwolf',
     r'skyhawk',
     r'\bexos\b',
-    # WD SATA consumer/NAS/enterprise lines
+    # WD — both shorthand and written out ("WD Red", "Western Digital Red Pro", etc.)
     r'wd[\s\-]red',
     r'wd[\s\-]gold',
     r'wd[\s\-]purple',
     r'wd[\s\-]blue',
     r'wd[\s\-]green',
     r'wd[\s\-]se\b',
+    r'western[\s\-]digital',            # catches "Western Digital Red", "Western Digital Gold", etc.
     # Other HDD manufacturers
     r'\bhgst\b',
     r'hitachi',
-    r'toshiba[\s\-]+(?:n|x|p|mg)\d',  # Toshiba NAS/enterprise (N300, X300, MG series)
+    r'toshiba[\s\-]+(?:n|x|p|mg)\d',   # Toshiba NAS/enterprise (N300, X300, MG series)
     # 3.5" form factor is a strong HDD signal in this subreddit
     r'3\.5\s*(?:"|in\b|inch)',
 ]
