@@ -1,10 +1,14 @@
 import re
 
 _HARD_EXCLUDE_PATTERNS = [
-    r'\bssds?\b',
-    r'\b(nvme|solid[\s\-]?state|nand)\b',
+    r'\bnvme\b',
+    r'\bnand\b',
     r'\bm\.2\b',
     r'\bu\.2\b',
+]
+_SOFT_EXCLUDE_PATTERNS = [
+    r'\bssds?\b',
+    r'solid[\s\-]?state',
 ]
 _HDD_PATTERNS = [
     r'\bhdds?\b',
@@ -32,27 +36,35 @@ def is_us_flair(flair):
 def is_sata_hdd(title):
     t = title.lower()
     for pat in _HARD_EXCLUDE_PATTERNS:
-        if re.search(pat, t):
-            return False, re.search(pat, t).group()
-    has_sata = any(re.search(p, t) for p in _HDD_PATTERNS)
+        if re.search(pat, t): return False, re.search(pat, t).group()
+    has_hdd = any(re.search(p, t) for p in _HDD_PATTERNS)
     has_sas = bool(re.search(r'\bsas\b', t))
-    if has_sas and not has_sata:
-        return False, "SAS only"
-    if has_sata:
-        return True, "mixed" if has_sas else ""
-    return False, "no HDD keyword"
+    has_ssd = any(re.search(p, t) for p in _SOFT_EXCLUDE_PATTERNS)
+    if (has_sas or has_ssd) and not has_hdd:
+        return False, "SAS only" if has_sas else "SSD only"
+    if has_hdd:
+        warnings = []
+        if has_sas: warnings.append("SAS")
+        if has_ssd: warnings.append("SSD")
+        w = f"mixed: {', '.join(warnings)}" if warnings else ""
+        return True, w
+    return False, 'no HDD keyword'
 
 tests = [
-    # (title, flair, expected)
-    ("[FS][US-MI] Western Digital Red Pros 8 TB",               "US-MI",    "NOTIFY"),
-    ("[FS][US-AUT] 4TB 8TB 18TB HDDs, 16TB, 1TB, 960GB, 800GB", "US-W",    "NOTIFY"),
-    ("[FS][US-SE] HGST 8TB SATA HDD",                           "US-SE",    "NOTIFY"),
-    ("[FS][US-E] 4x 8TB Seagate Exos SATA $280",                "US-E",     "NOTIFY"),
-    ("[W] WD Red 4TB",                                           "US-W",     "skip"),
-    ("[FS][CAN] 8TB HDD",                                        "CAN",      "skip"),
-    ("[FS][EU] Seagate Barracuda 4TB",                           "EU",       "skip"),
-    ("[FS][US-W] Samsung 870 EVO 1TB SSD",                       "US-W",     "skip"),
-    ("[FS][US-C] 10x 4TB SAS drives",                            "US-C",     "skip"),
+    # Previously missed posts
+    ("[FS][US-MI] Western Digital Red Pros 8 TB",                                               "US-MI", "NOTIFY"),
+    ("[FS][USA-UT] 4TB, 8TB, 18TB HDD's, 1.6TB, 1TB, 960GB, 800GB SSD's. Homelab Clear-out",  "US-W",  "NOTIFY"),
+    # Should still notify
+    ("[FS][US-SE] HGST 8TB SATA HDD",                                                          "US-SE", "NOTIFY"),
+    ("[FS][US-E] 4x 8TB Seagate Exos SATA $280",                                               "US-E",  "NOTIFY"),
+    ("[FS][US-C] 4x 8TB SAS + 4x 8TB SATA HDDs",                                               "US-C",  "NOTIFY"),
+    # Should be skipped
+    ("[W] WD Red 4TB",                                                                          "US-W",  "skip"),
+    ("[FS][CAN] 8TB HDD",                                                                       "CAN",   "skip"),
+    ("[FS][EU] Seagate Barracuda 4TB",                                                          "EU",    "skip"),
+    ("[FS][US-W] Samsung 870 EVO 1TB SSD",                                                      "US-W",  "skip"),
+    ("[FS][US-W] Samsung 980 Pro 2TB NVMe M.2",                                                 "US-W",  "skip"),
+    ("[FS][US-C] 10x 4TB SAS drives",                                                           "US-C",  "skip"),
 ]
 
 all_pass = True
@@ -67,9 +79,11 @@ for title, flair, expected in tests:
     why = ""
     if result == "skip":
         why = f"  ({'not [FS]' if not fs else 'not US flair' if not us else reason})"
-    status = "OK" if ok else "FAIL"
+    elif reason:
+        why = f"  (warning: {reason})"
+    status = "OK  " if ok else "FAIL"
     print(f"  [{status}] {result}{why}")
-    print(f"        {title[:70]}")
+    print(f"          {title[:75]}")
 
 print()
 print("All tests passed!" if all_pass else "SOME TESTS FAILED")

@@ -65,12 +65,18 @@ def is_us_flair(flair: str | None) -> bool:
 
 # ── SATA HDD filter ────────────────────────────────────────────────────────────
 
-# Hard disqualifiers — no SATA redemption possible
+# Hard disqualifiers — these are SSD-only technologies, never found alongside SATA HDDs
 _HARD_EXCLUDE_PATTERNS = [
-    r'\bssds?\b',
-    r'\b(nvme|solid[\s\-]?state|nand)\b',
+    r'\bnvme\b',
+    r'\bnand\b',
     r'\bm\.2\b',
     r'\bu\.2\b',
+]
+
+# Soft disqualifiers — skip UNLESS HDD indicators are also present (mixed lot)
+_SOFT_EXCLUDE_PATTERNS = [
+    r'\bssds?\b',               # SSD / SSDs / SSD's
+    r'solid[\s\-]?state',       # "solid state drives"
 ]
 
 # At least one of these must appear in the title
@@ -102,29 +108,36 @@ _HDD_PATTERNS = [
 
 def is_sata_hdd(title: str) -> tuple[bool, str]:
     """
-    Returns (matches, skip_reason).
-    skip_reason is non-empty when matches is False.
+    Returns (matches, warning).
+    warning is a non-empty string when the post is a mixed lot worth flagging.
 
-    SAS handling:
-    - Pure SAS post (SAS mentioned, no SATA indicators) → excluded
-    - Mixed lot (SAS + SATA indicators both present) → included, flagged as mixed
+    Exclusion logic:
+    - Hard excludes (NVMe, M.2, NAND): always skip, these never mix with SATA HDDs
+    - Soft excludes (SSD, solid state): skip ONLY if no HDD indicators present
+      If HDDs are also mentioned, let it through with a mixed-lot warning
+    - SAS: same soft-exclude logic as SSD
     """
     t = title.lower()
 
+    # Hard excludes — no redemption
     for pat in _HARD_EXCLUDE_PATTERNS:
         if re.search(pat, t):
-            label = re.search(pat, t).group()
-            return False, f"excluded keyword: {label}"
+            return False, re.search(pat, t).group()
 
-    has_sata = any(re.search(p, t) for p in _HDD_PATTERNS)
+    has_hdd = any(re.search(p, t) for p in _HDD_PATTERNS)
     has_sas = bool(re.search(r'\bsas\b', t))
+    has_ssd = any(re.search(p, t) for p in _SOFT_EXCLUDE_PATTERNS)
 
-    if has_sas and not has_sata:
-        return False, "SAS drive (no SATA indicators)"
+    # Pure SSD or pure SAS with no HDD content — skip
+    if (has_sas or has_ssd) and not has_hdd:
+        reason = "SAS only" if has_sas else "SSD only"
+        return False, reason
 
-    if has_sata:
-        # Mixed lot: has SAS but also SATA indicators — notify but flag it
-        warning = "⚠️ mixed SAS+SATA lot" if has_sas else ""
+    if has_hdd:
+        warnings = []
+        if has_sas: warnings.append("SAS")
+        if has_ssd: warnings.append("SSD")
+        warning = f"⚠️ mixed lot — also contains: {', '.join(warnings)}" if warnings else ""
         return True, warning
 
     return False, "no SATA HDD keyword matched"
