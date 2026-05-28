@@ -1,9 +1,7 @@
 name: homelabsales monitor
 
 on:
-  schedule:
-    - cron: '*/5 * * * *'   # every 5 minutes
-  workflow_dispatch:          # also allows manual trigger from the Actions tab
+  workflow_dispatch:   # manual trigger only — scheduling moved to systemd on Linux server
 
 permissions:
   contents: write             # needed to commit seen_posts.json back to the repo
