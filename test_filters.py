@@ -45,14 +45,17 @@ for p, expected in cases:
 
 print("\n-- r/buildapcsales (9070 XT) -------------------------------------")
 cases = [
-    (post("[GPU] XFX RX 9070 XT 16GB - $549.99 - Amazon",         "GPU"),      True),
-    (post("[GPU] Sapphire PULSE Radeon RX 9070 XT $599 Microcenter","GPU"),     True),
-    (post("[GPU] [RESTOCK] AMD RX 9070XT - $599 - Best Buy",       "GPU"),      True),
-    (post("[GPU] RX 9070 XT $499 - Newegg",                        "GPU"),      True),
-    (post("[GPU] XFX RX 9070 XT - $549",                           "Expired"),  False),  # expired
-    (post("[GPU] RX 9070 (non-XT) $449 - Amazon",                  "GPU"),      False),  # not XT
-    (post("[CPU] AMD Ryzen 9 9900X $399",                          "CPU"),      False),  # wrong item
-    (post("[GPU] RTX 5080 $999 - Amazon",                          "GPU"),      False),  # wrong GPU
+    (post("[GPU] XFX RX 9070 XT 16GB - $549.99 - Amazon",              "GPU"),       True),
+    (post("[GPU] Sapphire PULSE Radeon RX 9070 XT $599 Microcenter",   "GPU"),       True),
+    (post("[GPU] [RESTOCK] AMD RX 9070XT - $599 - Best Buy",           "GPU"),       True),
+    (post("[GPU] RX 9070 XT $499 - Newegg",                            "GPU"),       True),
+    (post("[GPU] XFX RX 9070 XT - $549",                               "Expired"),   False),  # expired flair
+    (post("[Expired] [GPU] RX 9070 XT - $549 - Amazon",                "GPU"),       False),  # expired in title
+    (post("[GPU] CyberPowerPC Prebuilt with RX 9070 XT - $1299",       "Prebuilt"),  False),  # prebuilt flair
+    (post("[GPU] Prebuilt PC RX 9070 XT $1199 - BestBuy",             "GPU"),       False),  # prebuilt in title
+    (post("[GPU] RX 9070 (non-XT) $449 - Amazon",                      "GPU"),       False),  # not XT
+    (post("[CPU] AMD Ryzen 9 9900X $399",                              "CPU"),       False),  # wrong item
+    (post("[GPU] RTX 5080 $999 - Amazon",                              "GPU"),       False),  # wrong GPU
 ]
 for p, expected in cases:
     if not check("GPU", p, expected):

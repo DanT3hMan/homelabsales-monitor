@@ -195,10 +195,22 @@ def _is_9070xt(title: str) -> bool:
     t = title.lower()
     return any(re.search(p, t) for p in _9070XT_PATTERNS)
 
-def _is_active_deal(flair: str | None) -> bool:
-    if not flair:
-        return True
-    return flair.strip().lower() not in {"expired", "complete"}
+_EXPIRED_FLAIRS = {"expired", "complete"}
+_PREBUILT_FLAIRS = {"prebuilt", "pre-built"}
+
+def _is_active_deal(title: str, flair: str | None) -> bool:
+    """Skip expired posts (flair OR title marker) and prebuilts."""
+    f = (flair or "").strip().lower()
+    if f in _EXPIRED_FLAIRS:
+        return False
+    if f in _PREBUILT_FLAIRS:
+        return False
+    t = title.lower()
+    if re.search(r'\[expired\]', t):
+        return False
+    if re.search(r'\bprebuilt\b|\bpre-built\b|\bpre built\b', t):
+        return False
+    return True
 
 def _gpu_price(title: str) -> tuple[float | None, str]:
     m = re.search(r'\$\s*([\d,]+(?:\.\d{1,2})?)', title)
@@ -214,7 +226,7 @@ def filter_buildapcsales(post: dict) -> tuple[bool, float | None, str, str]:
 
     if not _is_9070xt(title):
         return False, None, "", ""
-    if not _is_active_deal(flair):
+    if not _is_active_deal(title, flair):
         return False, None, "", ""
 
     price, price_label = _gpu_price(title)
@@ -350,8 +362,10 @@ def main():
 
         notified = 0
         for post in posts:
-            post_id = f"{monitor.subreddit}:{post['id']}"
-            if post_id in seen:
+            post_id  = f"{monitor.subreddit}:{post['id']}"
+            bare_id  = post['id']
+            # check both new prefixed format and old bare format for backward compat
+            if post_id in seen or bare_id in seen:
                 continue
             new_seen.add(post_id)
 
